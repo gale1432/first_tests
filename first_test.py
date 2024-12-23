@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path as pt
+import scipy as sp
 
 from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
@@ -35,36 +36,23 @@ def read_data(file_path):
     data.set_eeg_reference('average')
     data = data.resample(250.0)
     #data = data.filter(52, 48)
-    #print(data.ch_names)
     annotations = read_annotation(file_path)
     annotations_obj = create_annotations(annotations)
     data.set_annotations(annotations_obj)
-    #ppm = mne.find_events(data)
-    #print(ppm)
     events, event_id = mne.events_from_annotations(raw=data, event_id=EVENT_DICT)
-    #data.add_events(events, stim_channel='PHOTIC PH', replace=True)
-    epochs2 = mne.make_fixed_length_epochs(raw=data, duration=1.8)
-    epochs2.events = events
-    epochs2.event_id = event_id
-    epochs2.selection = np.arange(len(events))
-    ppm = epochs2.to_data_frame()
-    print(ppm)
-    """epochs = mne.Epochs(data, events=events, event_id=event_id, event_repeated='drop', verbose=True)
-    dataframe = epochs.to_data_frame(verbose=True)
-    segmented_data = epochs.get_data()"""
-    #print(data)
-    #testing_df = mne.epochs.make_metadata(events, event_id, None, None, 250)
-    #print(testing_df)
-    #print(events)
-    #print(data.events)
-    #print(epochs.events)
-    print('VALIENDO VRGA******************************************************')
-    print(ppm['condition'].unique())
-    #print(dataframe)
-    """print(segmented_data)
-    print(segmented_data.shape)
-    print('DATAFRAME 2*********************PRRO')
-    print(epochs2.to_data_frame(verbose=True))"""
+    epochs = mne.make_fixed_length_epochs(raw=data, duration=1.8)
+    epochs.events = events
+    epochs.event_id = event_id
+    epochs.selection = np.arange(len(events))
+    epoch_dataframe = epochs.to_data_frame()
+    print(epoch_dataframe)
+    segmented_data = epochs.get_data()
+    #check_unique_conditions_per_epoch(epoch_dataframe)
+    fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
+    #print(np.shape(fft_df))
+    fft_columns = [i for i in range(np.shape(fft_df)[1])]
+    final_df = pd.DataFrame(data=fft_df, columns=fft_columns)
+    print(final_df)
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -90,6 +78,41 @@ def rename_signal_channels(raw, annotations):
     ann_names = annotations['channel'].unique()
     for index in range(len(ann_names)):
         channel_dict[raw_names[index]] = ann_names[index]
+
+def check_unique_conditions_per_epoch(dataframe):
+    num_epochs = dataframe['epoch'].max()
+    for no in range(num_epochs+1):
+        temp_df = dataframe[dataframe['epoch'] == no]
+        print(str(no) + " EPOCH")
+        print(temp_df['condition'].unique())
+        print('******************************************************')
+
+def get_column_names(dataframe):
+    column_names = dataframe.columns
+    column_names = column_names[3:]
+    return column_names.tolist()
+
+def fft_matrix_creation(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+    #print(final_matrix)
+    """epoch = dataframe[dataframe['epoch'] == 0]
+    coeficients = sp.fft.fft(epoch[column_names[0]].values)
+    print(coeficients.shape)"""
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.append(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            coefficients = sp.fft.fft(epoch[item].values)
+            for co in coefficients:
+                add_arr.append(co)
+            #print(add_arr)
+        #add_arr = add_arr.append(condition) #problem here, makes list become type None, for some fucking reason
+        final_matrix.append(add_arr)
+    return (final_matrix, labels)
 
 read_data(train_file[0])
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
