@@ -4,6 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
 from pathlib import Path as pt
+import joblib
 import scipy as sp
 
 from mne.conftest import event_id
@@ -40,19 +41,32 @@ def read_data(file_path):
     annotations_obj = create_annotations(annotations)
     data.set_annotations(annotations_obj)
     events, event_id = mne.events_from_annotations(raw=data, event_id=EVENT_DICT)
-    epochs = mne.make_fixed_length_epochs(raw=data, duration=1.8)
-    epochs.events = events
-    epochs.event_id = event_id
-    epochs.selection = np.arange(len(events))
-    epoch_dataframe = epochs.to_data_frame()
-    print(epoch_dataframe)
+    print(events.shape)
+    print(events)
+    try:
+        epochs = mne.make_fixed_length_epochs(raw=data, duration=1.8)
+        epochs.events = events
+        epochs.event_id = event_id
+        epochs.selection = np.arange(len(events))
+        epochs.drop_log = tuple(() if k in epochs.selection else ("IGNORED",) for k in range(600))
+        """print(len(epochs.drop_log))
+        print(len(epochs.selection))"""
+        print(epochs.drop_log)
+        epoch_dataframe = epochs.to_data_frame()
+    except ValueError:
+        print("This file could not be used!")
+        raise ValueError
+    #print(epoch_dataframe)
     segmented_data = epochs.get_data()
     #check_unique_conditions_per_epoch(epoch_dataframe)
     fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
     #print(np.shape(fft_df))
-    fft_columns = [i for i in range(np.shape(fft_df)[1])]
-    final_df = pd.DataFrame(data=fft_df, columns=fft_columns)
-    print(final_df)
+    if np.shape(fft_df)[1]:
+        fft_columns = [i for i in range(np.shape(fft_df)[1])]
+    else:
+        fft_columns = [i for i in range(np.shape(fft_df)[0])]
+    #file_df = pd.DataFrame(data=fft_df, columns=fft_columns)
+    return fft_df, fft_labels, fft_columns
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -112,7 +126,28 @@ def fft_matrix_creation(dataframe):
             #print(add_arr)
         #add_arr = add_arr.append(condition) #problem here, makes list become type None, for some fucking reason
         final_matrix.append(add_arr)
-    return (final_matrix, labels)
+    return pd.DataFrame(final_matrix), pd.Series(labels)
 
-read_data(train_file[0])
+def process_data(file_path_list):
+    final_df = pd.DataFrame()
+    final_labels = pd.Series()
+    file_num = 1
+    for file_name in file_path_list:
+        print("************************************************************")
+        print("File number: " + str(file_num))
+        try:
+            file_df, fft_labels, fft_columns = read_data(file_name)
+            final_df = pd.concat([final_df, file_df], axis=0)
+            final_labels = pd.concat([final_labels, fft_labels], axis=0)
+        except ValueError:
+            continue
+        file_num += 1
+
+    return final_df, final_labels
+
+#read_data(train_file[0])
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
+process_df, process_labels = process_data(train_file)
+print(process_df)
+
+joblib.dump((process_df, process_labels), 'fft_processed_data.sav')
