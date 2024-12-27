@@ -6,6 +6,7 @@ import pandas as pd
 from pathlib import Path as pt
 import joblib
 import scipy as sp
+import pywt
 
 from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
@@ -56,17 +57,15 @@ def read_data(file_path):
     except ValueError:
         print("This file could not be used!")
         raise ValueError
-    #print(epoch_dataframe)
-    segmented_data = epochs.get_data()
     #check_unique_conditions_per_epoch(epoch_dataframe)
+    #********************** THIS IS THE FAST FOURIER TRASNFORM CODE *******************************
     fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
-    #print(np.shape(fft_df))
     if np.shape(fft_df)[1]:
         fft_columns = [i for i in range(np.shape(fft_df)[1])]
     else:
         fft_columns = [i for i in range(np.shape(fft_df)[0])]
-    #file_df = pd.DataFrame(data=fft_df, columns=fft_columns)
     return fft_df, fft_labels, fft_columns
+    #********************** THIS IS THE CONTINUOUS WAVELET TRANSFORM CODE ****************************
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -128,6 +127,24 @@ def fft_matrix_creation(dataframe):
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
+def continuous_wt(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.append(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            coefficients, freq = pywt.cwt(epoch[item].values, )
+            for co in coefficients:
+                add_arr.append(co)
+            #print(add_arr)
+        final_matrix.append(add_arr)
+    return pd.DataFrame(final_matrix), pd.Series(labels)
+
 def process_data(file_path_list):
     final_df = pd.DataFrame()
     final_labels = pd.Series()
@@ -145,9 +162,9 @@ def process_data(file_path_list):
 
     return final_df, final_labels
 
-#read_data(train_file[0])
+read_data(train_file[0])
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
-process_df, process_labels = process_data(train_file)
+"""process_df, process_labels = process_data(train_file)
 print(process_df)
 
-joblib.dump((process_df, process_labels), 'fft_processed_data.sav')
+joblib.dump((process_df, process_labels), 'fft_processed_data.sav')"""
