@@ -7,6 +7,7 @@ from pathlib import Path as pt
 import joblib
 import scipy as sp
 import pywt
+import os
 
 from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
@@ -27,13 +28,14 @@ EVENT_DICT = {
     'nesz': 11,
     'bckg': 12
 }
-CED_PATH='C:\\Users\\arsms\\Documents\\tuh_eeg\\edf'
+CED_PATH = os.path.join(os.path.expanduser('~'), 'Documents', 'tuh_eeg', 'edf')
 HOME_PATH='E:\\Files\\tuh_eeg\\edf\\train'
 
-train_file = glob(CED_PATH+'\\train\\**/*.edf', recursive=True)
+#train_file = glob(CED_PATH+'\\train\\**/*.edf', recursive=True) #for windows
+train_file = glob(CED_PATH+'/train/**/*.edf', recursive=True) #for linux
 print(len(train_file))
 
-def read_data(file_path):
+def read_data(file_path, preprocessing_type):
     data = mne.io.read_raw_edf(file_path, preload=True)
     data.set_eeg_reference('average')
     data = data.resample(250.0)
@@ -59,13 +61,29 @@ def read_data(file_path):
         raise ValueError
     #check_unique_conditions_per_epoch(epoch_dataframe)
     #********************** THIS IS THE FAST FOURIER TRASNFORM CODE *******************************
-    fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
-    if np.shape(fft_df)[1]:
-        fft_columns = [i for i in range(np.shape(fft_df)[1])]
-    else:
-        fft_columns = [i for i in range(np.shape(fft_df)[0])]
-    return fft_df, fft_labels, fft_columns
+    if preprocessing_type == 1:
+        fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
+        if np.shape(fft_df)[1]:
+            fft_columns = [i for i in range(np.shape(fft_df)[1])]
+        else:
+            fft_columns = [i for i in range(np.shape(fft_df)[0])]
+        return fft_df, fft_labels, fft_columns
     #********************** THIS IS THE CONTINUOUS WAVELET TRANSFORM CODE ****************************
+    elif preprocessing_type == 2:
+        cwt_df, cwt_labels = continuous_wt(epoch_dataframe)
+        if np.shape(cwt_df)[1]:
+            cwt_columns = [i for i in range(np.shape(cwt_df)[1])]
+        else:
+            cwt_columns = [i for i in range(np.shape(cwt_df)[0])]
+        return cwt_df, cwt_labels, cwt_columns
+    #*********************** THIS IS WAVELET PACKET DECOMPOSITION CODE ******************************
+    elif preprocessing_type == 3:
+        wpd_df, wpd_labels = wavelet_packet_decomp(epoch_dataframe)
+        if np.shape(wpd_df)[1]:
+            wpd_columns = [i for i in range(np.shape(wpd_df)[1])]
+        else:
+            wpd_columns = [i for i in range(np.shape(wpd_df)[0])]
+        return wpd_df, wpd_labels, wpd_columns
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -132,20 +150,45 @@ def continuous_wt(dataframe):
     column_names = get_column_names(dataframe)
     labels = []
     final_matrix = []
+    scales = np.arange(1, 31)
 
     for i in range(epoch_number):
         epoch = dataframe[dataframe['epoch'] == i]
         labels.append(epoch['condition'].unique())
         add_arr = []
         for item in column_names:
-            coefficients, freq = pywt.cwt(epoch[item].values, )
+            coefficients, freq = pywt.cwt(epoch[item].values, scales, 'mexh')
             for co in coefficients:
                 add_arr.append(co)
             #print(add_arr)
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
-def process_data(file_path_list):
+def wavelet_packet_decomp(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.append(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            coefficients = []
+            wavelet_dec = pywt.WaveletPacket(epoch[item].values, 'db4', 'zero', 7)
+            levels = wavelet_dec.get_level(7, order='freq')
+            for level in levels:
+                data = level.data
+                coefficients.append(data)
+            for co in coefficients:
+                add_arr.append(co)
+            # print(add_arr)
+        final_matrix.append(add_arr)
+    return pd.DataFrame(final_matrix), pd.Series(labels)
+
+
+def process_data(file_path_list, preprocessing_type):
     final_df = pd.DataFrame()
     final_labels = pd.Series()
     file_num = 1
@@ -153,7 +196,7 @@ def process_data(file_path_list):
         print("************************************************************")
         print("File number: " + str(file_num))
         try:
-            file_df, fft_labels, fft_columns = read_data(file_name)
+            file_df, fft_labels, fft_columns = read_data(file_name, preprocessing_type)
             final_df = pd.concat([final_df, file_df], axis=0)
             final_labels = pd.concat([final_labels, fft_labels], axis=0)
         except ValueError:
@@ -162,7 +205,12 @@ def process_data(file_path_list):
 
     return final_df, final_labels
 
-read_data(train_file[0])
+
+"""df, labels, columns = read_data(train_file[0], 3)
+print(df)"""
+df, labels, columns = read_data('/home/gael/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 1)
+#print(type(df[0]))
+print(df)
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
 """process_df, process_labels = process_data(train_file)
 print(process_df)
