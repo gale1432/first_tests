@@ -8,6 +8,7 @@ import joblib
 import scipy as sp
 import pywt
 import os
+from fathon import DFA
 
 from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
@@ -208,9 +209,10 @@ def process_data(file_path_list, preprocessing_type):
 
 """df, labels, columns = read_data(train_file[0], 3)
 print(df)"""
-df, labels, columns = read_data('/home/gael/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 1)
+df, labels, columns = read_data('/home/gael/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 3)
 #print(type(df[0]))
-print(df)
+#print(df[0].apply(type))
+#print(df)
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
 """process_df, process_labels = process_data(train_file)
 print(process_df)
