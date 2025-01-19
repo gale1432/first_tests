@@ -8,7 +8,9 @@ import joblib
 import scipy as sp
 import pywt
 import os
-from fathon import DFA
+from montage import NewMontage
+from feat_creation import get_stats
+#from fathon import DFA
 
 from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
@@ -57,6 +59,9 @@ def read_data(file_path, preprocessing_type):
         print(len(epochs.selection))"""
         print(epochs.drop_log)
         epoch_dataframe = epochs.to_data_frame()
+        new_montage = NewMontage(epoch_dataframe)
+        epoch_dataframe = new_montage.change_montage()
+        print(epoch_dataframe)
     except ValueError:
         print("This file could not be used!")
         raise ValueError
@@ -69,14 +74,14 @@ def read_data(file_path, preprocessing_type):
         else:
             fft_columns = [i for i in range(np.shape(fft_df)[0])]
         return fft_df, fft_labels, fft_columns
-    #********************** THIS IS THE CONTINUOUS WAVELET TRANSFORM CODE ****************************
+    #********************** THIS IS THE DISCRETE WAVELET TRANSFORM CODE ****************************
     elif preprocessing_type == 2:
-        cwt_df, cwt_labels = continuous_wt(epoch_dataframe)
-        if np.shape(cwt_df)[1]:
-            cwt_columns = [i for i in range(np.shape(cwt_df)[1])]
+        dwt_df, dwt_labels = discrete_wt(epoch_dataframe)
+        if np.shape(dwt_df)[1]:
+            dwt_columns = [i for i in range(np.shape(dwt_df)[1])]
         else:
-            cwt_columns = [i for i in range(np.shape(cwt_df)[0])]
-        return cwt_df, cwt_labels, cwt_columns
+            dwt_columns = [i for i in range(np.shape(dwt_df)[0])]
+        return dwt_df, dwt_labels, dwt_columns
     #*********************** THIS IS WAVELET PACKET DECOMPOSITION CODE ******************************
     elif preprocessing_type == 3:
         wpd_df, wpd_labels = wavelet_packet_decomp(epoch_dataframe)
@@ -146,12 +151,13 @@ def fft_matrix_creation(dataframe):
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
+################## GIVEN THAT CONTINUOUS WAVELET TRANSFORM IS BETTER SUITED FOR NEURAL NETWORKS, THIS METHOD WONT BE USED FOR NOW #######################
 def continuous_wt(dataframe):
     epoch_number = dataframe['epoch'].max()
     column_names = get_column_names(dataframe)
     labels = []
     final_matrix = []
-    scales = np.arange(1, 31)
+    scales = np.arange(1, 11)
 
     for i in range(epoch_number):
         epoch = dataframe[dataframe['epoch'] == i]
@@ -159,10 +165,39 @@ def continuous_wt(dataframe):
         add_arr = []
         for item in column_names:
             coefficients, freq = pywt.cwt(epoch[item].values, scales, 'mexh')
+            print(coefficients.shape)
+            print(type(coefficients))
             for co in coefficients:
                 add_arr.append(co)
+                print(co.shape)
+                print(type(co))
+                #add_arr.extend(co)
             #print(add_arr)
         final_matrix.append(add_arr)
+    #print(final_matrix)
+    return pd.DataFrame(final_matrix), pd.Series(labels)
+################################################################################################################
+
+def discrete_wt(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.append(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            coefficients = pywt.wavedec(epoch[item].values, wavelet='db4', level=5)
+            #print(type(coefficients))
+            #print(len(coefficients))
+            for co in coefficients:
+                stats = get_stats(co)
+                add_arr.extend(stats)
+            #print(add_arr)
+        final_matrix.append(add_arr)
+    #print(final_matrix)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
 def wavelet_packet_decomp(dataframe):
@@ -206,10 +241,15 @@ def process_data(file_path_list, preprocessing_type):
 
     return final_df, final_labels
 
-
-"""df, labels, columns = read_data(train_file[0], 3)
+#print(pywt.wavelist(family='db',kind='discrete'))
+df, labels, columns = read_data(train_file[0], 2)
+print(df)
+#df1, labels1, columns1 = read_data(train_file[-1], 1)
+#print(train_file)
+#print(df)
+#df, labels = process_data(train_file, 1)
+"""df, labels, columns = read_data('/home/gael/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 3)
 print(df)"""
-df, labels, columns = read_data('/home/gael/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 3)
 #print(type(df[0]))
 #print(df[0].apply(type))
 #print(df)
