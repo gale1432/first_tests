@@ -51,7 +51,7 @@ def read_data(file_path, preprocessing_type):
     #print(events.shape)
     #print(events)
     try:
-        epochs = mne.make_fixed_length_epochs(raw=data, duration=2)
+        epochs = mne.make_fixed_length_epochs(raw=data, duration=4.096)
         epochs.events = events
         epochs.event_id = ev_id
         epochs.selection = np.arange(len(events))
@@ -100,6 +100,10 @@ def read_data(file_path, preprocessing_type):
         else:
             dwt_columns = [i for i in range(np.shape(ewt_df)[0])]
         return ewt_df, ewt_labels, dwt_columns
+    elif preprocessing_type == 5:
+        ppd_matrix, ppd_labels = matrices_creation(epoch_dataframe)
+        return ppd_matrix, ppd_labels
+    return "Tu puta madre"
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -211,6 +215,7 @@ def discrete_wt(dataframe):
     return pd.DataFrame(final_matrix), pd.Series(labels)
 ################################################
 
+############### EMPIRICAL WAVELET TRANSFORM #####################
 def empirical_wt(dataframe):
     mode_number = 4
     epoch_number = dataframe['epoch'].max()
@@ -232,6 +237,14 @@ def empirical_wt(dataframe):
                 add_arr.extend(stats)
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
+
+################## EMPIRICAL MODE DECOMPOSITION ###################
+def empirical_md(dataframe):
+    mode_number = 4
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
 
 def wavelet_packet_decomp(dataframe):
     epoch_number = dataframe['epoch'].max()
@@ -256,6 +269,21 @@ def wavelet_packet_decomp(dataframe):
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
+############## Preparing 2D matrices ###########################
+def matrices_creation(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.append(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            add_arr.append(list(epoch[item].values))
+        final_matrix.append(add_arr)
+    return final_matrix, labels
+
 
 def process_data(file_path_list, preprocessing_type):
     final_df = pd.DataFrame()
@@ -269,6 +297,25 @@ def process_data(file_path_list, preprocessing_type):
             file_df, fft_labels, fft_columns = read_data(file_name, preprocessing_type)
             final_df = pd.concat([final_df, file_df], axis=0)
             final_labels = pd.concat([final_labels, fft_labels], axis=0)
+        except ValueError:
+            unusable_files_counter += 1
+            continue
+        file_num += 1
+    print("Unusable files: " + str(unusable_files_counter))
+    return final_df, final_labels
+
+def process_lstm_data(file_path_list, preprocessing_type):
+    final_df = list()
+    final_labels = list()
+    file_num = 1
+    unusable_files_counter = 0
+    for file_name in file_path_list:
+        print("***********************************************************")
+        print("File number: " + str(file_num))
+        try:
+            file_matrix, labels = read_data(file_name, preprocessing_type)
+            final_df.append(file_matrix)
+            final_labels.append(labels)
         except ValueError:
             unusable_files_counter += 1
             continue
@@ -294,7 +341,20 @@ def process_all_data(preprocessing_type):
     df, labels = process_data(eval_file, preprocessing_type)
     joblib.dump((df, labels), 'eval_ewt_two.sav')
 
-process_all_data(4)
+#process_all_data(4)
+
+def process_lstm_all_data(preprocessing_type):
+    #train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
+    dev_file = glob(CED_PATH + '/dev/**/*.edf', recursive=True)
+    eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)
+    #df, labels = process_lstm_data(train_file, preprocessing_type)
+    #joblib.dump((df, labels), 'train_ppd_two.sav')
+    #df, labels = process_lstm_data(dev_file, preprocessing_type)
+    #joblib.dump((df, labels), 'dev_ppd.sav')
+    df, labels = process_lstm_data(eval_file, preprocessing_type)
+    joblib.dump((df, labels), 'eval_ppd.sav')
+
+process_lstm_all_data(5)
 #df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 2)
 #print(df)
 #read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 4)
