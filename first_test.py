@@ -8,7 +8,7 @@ import scipy as sp
 import pywt
 import os
 from montage import NewMontage
-from feat_creation import get_stats
+import feat_creation
 import ewtpy
 #from fathon import DFA
 
@@ -207,7 +207,7 @@ def discrete_wt(dataframe):
             #print(type(coefficients))
             #print(len(coefficients))
             for co in coefficients:
-                stats = get_stats(co)
+                stats = feat_creation.get_stats(co)
                 add_arr.extend(stats)
             #print(add_arr)
         final_matrix.append(add_arr)
@@ -233,7 +233,7 @@ def empirical_wt(dataframe):
             plt.show()"""
             coefficients_dataframe = pd.DataFrame(coefficients)
             for i in range(mode_number):
-                stats = get_stats(list(coefficients_dataframe[i]))
+                stats = feat_creation.get_stats(list(coefficients_dataframe[i]))
                 add_arr.extend(stats)
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
@@ -280,7 +280,11 @@ def matrices_creation(dataframe):
         labels.append(epoch['condition'].unique())
         add_arr = []
         for item in column_names:
-            add_arr.append(list(epoch[item].values))
+            co_arr = list()
+            coefficients = pywt.wavedec(epoch[item].values, wavelet='db4', level=4)
+            for co in coefficients:
+                co_arr.append(feat_creation.get_full_stats(co))
+            add_arr.append(co_arr)
         final_matrix.append(add_arr)
     return final_matrix, labels
 
@@ -344,17 +348,18 @@ def process_all_data(preprocessing_type):
 #process_all_data(4)
 
 def process_lstm_all_data(preprocessing_type):
-    #train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
-    dev_file = glob(CED_PATH + '/dev/**/*.edf', recursive=True)
-    eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)
-    #df, labels = process_lstm_data(train_file, preprocessing_type)
-    #joblib.dump((df, labels), 'train_ppd_two.sav')
-    #df, labels = process_lstm_data(dev_file, preprocessing_type)
+    train_file = pd.read_csv('train_summary.csv')['0'].tolist()
+    dev_file = pd.read_csv('dev_summary.csv')['0'].tolist()
+    eval_file = pd.read_csv('eval_summary.csv')['0'].tolist()
+    df_train, labels_train = process_lstm_data(train_file, preprocessing_type)
+    #joblib.dump((df, labels), 'train_ppd.sav')
+    df_dev, labels_dev = process_lstm_data(dev_file, preprocessing_type)
     #joblib.dump((df, labels), 'dev_ppd.sav')
-    df, labels = process_lstm_data(eval_file, preprocessing_type)
-    joblib.dump((df, labels), 'eval_ppd.sav')
+    #df, labels = process_lstm_data(eval_file, preprocessing_type)
+    #joblib.dump((df, labels), 'eval_ppd.sav')
+    return df_train, labels_train, df_dev, labels_dev
 
-process_lstm_all_data(5)
+#process_lstm_all_data(5)
 #df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 2)
 #print(df)
 #read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 4)
