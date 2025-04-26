@@ -103,7 +103,15 @@ def read_data(file_path, preprocessing_type):
     elif preprocessing_type == 5:
         ppd_matrix, ppd_labels = matrices_creation(epoch_dataframe)
         return ppd_matrix, ppd_labels
-    return "Tu puta madre"
+    #******************** THIS IS DWT, BUT WITH CHARACTERISTICS EXTRACTED FROM NAJAFI *******************
+    elif preprocessing_type == 6:
+        dwt_df, dwt_labels = najafi_dwt(epoch_dataframe)
+        if np.shape(dwt_df)[1]:
+            dwt_columns = [i for i in range(np.shape(dwt_df)[1])]
+        else:
+            dwt_columns = [i for i in range(np.shape(dwt_df)[0])]
+        return dwt_df, dwt_labels, dwt_columns
+    return "GG"
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
@@ -215,6 +223,24 @@ def discrete_wt(dataframe):
     return pd.DataFrame(final_matrix), pd.Series(labels)
 ################################################
 
+################# NAJAFI DWT ################################
+def najafi_dwt(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.extend(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            coefficients = pywt.wavedec(epoch[item].values, wavelet='coif3', level=4)
+            for co in coefficients:
+                stats = feat_creation.get_stats_with_power(co)
+                add_arr.extend(stats)
+        final_matrix.append(add_arr)
+    return pd.DataFrame(final_matrix), pd.Series(labels)
+
 ############### EMPIRICAL WAVELET TRANSFORM #####################
 def empirical_wt(dataframe):
     mode_number = 4
@@ -277,7 +303,7 @@ def matrices_creation(dataframe):
     final_matrix = []
     for i in range(epoch_number):
         epoch = dataframe[dataframe['epoch'] == i]
-        labels.append(epoch['condition'].unique())
+        labels.extend(epoch['condition'].unique())
         add_arr = []
         for item in column_names:
             co_arr = list()
@@ -299,9 +325,11 @@ def process_data(file_path_list, preprocessing_type):
         print("File number: " + str(file_num))
         try:
             file_df, fft_labels, fft_columns = read_data(file_name, preprocessing_type)
+            print('pp')
             final_df = pd.concat([final_df, file_df], axis=0)
             final_labels = pd.concat([final_labels, fft_labels], axis=0)
         except ValueError:
+            print('SOMETHING HAPPENED!')
             unusable_files_counter += 1
             continue
         file_num += 1
@@ -319,7 +347,7 @@ def process_lstm_data(file_path_list, preprocessing_type):
         try:
             file_matrix, labels = read_data(file_name, preprocessing_type)
             final_df.append(file_matrix)
-            final_labels.append(labels)
+            final_labels.extend(labels)
         except ValueError:
             unusable_files_counter += 1
             continue
@@ -339,13 +367,13 @@ def process_all_data(preprocessing_type):
     dev_file = glob(CED_PATH+'/dev/**/*.edf', recursive=True)
     eval_file = glob(CED_PATH+'/eval/**/*.edf', recursive=True)
     df, labels = process_data(train_file, preprocessing_type)
-    joblib.dump((df, labels), 'train_ewt_two.sav')
+    joblib.dump((df, labels), 'train_naj_two.sav')
     df, labels = process_data(dev_file, preprocessing_type)
-    joblib.dump((df, labels), 'dev_ewt_two.sav')
+    joblib.dump((df, labels), 'dev_naj_two.sav')
     df, labels = process_data(eval_file, preprocessing_type)
-    joblib.dump((df, labels), 'eval_ewt_two.sav')
+    joblib.dump((df, labels), 'eval_naj_two.sav')
 
-#process_all_data(4)
+process_all_data(6)
 
 def process_lstm_all_data(preprocessing_type):
     train_file = pd.read_csv('train_summary.csv')['0'].tolist()
