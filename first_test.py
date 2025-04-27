@@ -106,11 +106,7 @@ def read_data(file_path, preprocessing_type):
     #******************** THIS IS DWT, BUT WITH CHARACTERISTICS EXTRACTED FROM NAJAFI *******************
     elif preprocessing_type == 6:
         dwt_df, dwt_labels = najafi_dwt(epoch_dataframe)
-        if np.shape(dwt_df)[1]:
-            dwt_columns = [i for i in range(np.shape(dwt_df)[1])]
-        else:
-            dwt_columns = [i for i in range(np.shape(dwt_df)[0])]
-        return dwt_df, dwt_labels, dwt_columns
+        return dwt_df, dwt_labels
     return "GG"
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
@@ -231,15 +227,19 @@ def najafi_dwt(dataframe):
     final_matrix = []
     for i in range(epoch_number):
         epoch = dataframe[dataframe['epoch'] == i]
-        labels.extend(epoch['condition'].unique())
+        ll = epoch['condition'].unique()
+        for l in ll:
+            labels.append(EVENT_DICT[l])
         add_arr = []
         for item in column_names:
+            co_arr = list()
             coefficients = pywt.wavedec(epoch[item].values, wavelet='coif3', level=4)
             for co in coefficients:
                 stats = feat_creation.get_stats_with_power(co)
-                add_arr.extend(stats)
+                co_arr.extend(stats)
+            add_arr.append(co_arr)
         final_matrix.append(add_arr)
-    return pd.DataFrame(final_matrix), pd.Series(labels)
+    return final_matrix, labels
 
 ############### EMPIRICAL WAVELET TRANSFORM #####################
 def empirical_wt(dataframe):
@@ -353,7 +353,7 @@ def process_lstm_data(file_path_list, preprocessing_type):
             continue
         file_num += 1
     print("Unusable files: " + str(unusable_files_counter))
-    return final_df, final_labels
+    return np.array(final_df, dtype='object'), np.array(final_labels)
 
 #print(pywt.wavelist(family='db',kind='discrete'))
 #df, labels, columns = read_data(train_file[0], 2)
@@ -373,7 +373,7 @@ def process_all_data(preprocessing_type):
     df, labels = process_data(eval_file, preprocessing_type)
     joblib.dump((df, labels), 'eval_naj_two.sav')
 
-process_all_data(6)
+#process_all_data(6)
 
 def process_lstm_all_data(preprocessing_type):
     train_file = pd.read_csv('train_summary.csv')['0'].tolist()
@@ -387,7 +387,25 @@ def process_lstm_all_data(preprocessing_type):
     #joblib.dump((df, labels), 'eval_ppd.sav')
     return df_train, labels_train, df_dev, labels_dev
 
+def process_bilstm_all_data(preprocessing_type):
+    train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
+    dev_file = glob(CED_PATH + '/dev/**/*.edf', recursive=True)
+    eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)
+    df, labels = process_lstm_data(train_file, preprocessing_type)
+    np.save('dwt_najafi/train_naj_x.npy', df, allow_pickle=True)
+    np.save('dwt_najafi/train_naj_y.npy', labels, allow_pickle=True)
+    #joblib.dump((df, labels), 'dwt_najafi/train_naj_four.sav')
+    df, labels = process_lstm_data(dev_file, preprocessing_type)
+    np.save('dwt_najafi/dev_naj_x.npy', df, allow_pickle=True)
+    np.save('dwt_najafi/dev_naj_y.npy', labels, allow_pickle=True)
+    #joblib.dump((df, labels), 'dwt_najafi/dev_naj_four.sav')
+    df, labels = process_lstm_data(eval_file, preprocessing_type)
+    np.save('dwt_najafi/eval_naj_x.npy', df, allow_pickle=True)
+    np.save('dwt_najafi/eval_naj_y.npy', labels, allow_pickle=True)
+    #joblib.dump((df, labels), 'dwt_najafi/eval_naj_four.sav')
+
 #process_lstm_all_data(5)
+process_bilstm_all_data(6)
 #df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 2)
 #print(df)
 #read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 4)
