@@ -236,9 +236,9 @@ def najafi_dwt(dataframe):
             coefficients = pywt.wavedec(epoch[item].values, wavelet='coif3', level=4)
             for co in coefficients:
                 stats = feat_creation.get_stats_with_power(co)
-                co_arr.extend(stats)
-            add_arr.append(co_arr)
-        final_matrix.append(add_arr)
+                co_arr.append(stats)
+            add_arr.append(np.array(co_arr))
+        final_matrix.append(np.array(add_arr, dtype='object'))
     return final_matrix, labels
 
 ############### EMPIRICAL WAVELET TRANSFORM #####################
@@ -346,7 +346,7 @@ def process_lstm_data(file_path_list, preprocessing_type):
         print("File number: " + str(file_num))
         try:
             file_matrix, labels = read_data(file_name, preprocessing_type)
-            final_df.append(file_matrix)
+            final_df.extend(file_matrix)
             final_labels.extend(labels)
         except ValueError:
             unusable_files_counter += 1
@@ -388,21 +388,22 @@ def process_lstm_all_data(preprocessing_type):
     return df_train, labels_train, df_dev, labels_dev
 
 def process_bilstm_all_data(preprocessing_type):
-    train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
+    """train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
     dev_file = glob(CED_PATH + '/dev/**/*.edf', recursive=True)
-    eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)
-    df, labels = process_lstm_data(train_file, preprocessing_type)
-    np.save('dwt_najafi/train_naj_x.npy', df, allow_pickle=True)
-    np.save('dwt_najafi/train_naj_y.npy', labels, allow_pickle=True)
-    #joblib.dump((df, labels), 'dwt_najafi/train_naj_four.sav')
-    df, labels = process_lstm_data(dev_file, preprocessing_type)
-    np.save('dwt_najafi/dev_naj_x.npy', df, allow_pickle=True)
-    np.save('dwt_najafi/dev_naj_y.npy', labels, allow_pickle=True)
-    #joblib.dump((df, labels), 'dwt_najafi/dev_naj_four.sav')
-    df, labels = process_lstm_data(eval_file, preprocessing_type)
-    np.save('dwt_najafi/eval_naj_x.npy', df, allow_pickle=True)
-    np.save('dwt_najafi/eval_naj_y.npy', labels, allow_pickle=True)
-    #joblib.dump((df, labels), 'dwt_najafi/eval_naj_four.sav')
+    eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)"""
+    train_file = pd.read_csv('train_summary.csv')['0'].tolist()
+    dev_file = pd.read_csv('dev_summary.csv')['0'].tolist()
+    eval_file = pd.read_csv('eval_summary.csv')['0'].tolist()
+    df_train, labels_train = process_lstm_data(train_file, preprocessing_type)
+    np.save('dwt_najafi/train_naj_x.npy', df_train, allow_pickle=True)
+    np.save('dwt_najafi/train_naj_y.npy', labels_train, allow_pickle=True)
+    df_dev, labels_dev = process_lstm_data(dev_file, preprocessing_type)
+    np.save('dwt_najafi/dev_naj_x.npy', df_dev, allow_pickle=True)
+    np.save('dwt_najafi/dev_naj_y.npy', labels_dev, allow_pickle=True)
+    df_eval, labels_eval = process_lstm_data(eval_file, preprocessing_type)
+    np.save('dwt_najafi/eval_naj_x.npy', df_eval, allow_pickle=True)
+    np.save('dwt_najafi/eval_naj_y.npy', labels_eval, allow_pickle=True)
+    #return df_train, labels_train, df_dev, labels_dev, df_eval, labels_eval
 
 #process_lstm_all_data(5)
 process_bilstm_all_data(6)
