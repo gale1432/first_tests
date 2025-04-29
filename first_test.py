@@ -18,18 +18,18 @@ from sklearn.preprocessing import LabelEncoder
 #mne.viz.set_browser_backend("qt")
 
 EVENT_DICT = {
-    'fnsz': 1,
-    'gnsz': 2,
-    'spsz': 3,
-    'cpsz': 4,
-    'absz': 5,
-    'tnsz': 6,
-    'cnsz': 7,
-    'tcsz': 8,
-    'atsz': 9,
-    'mysz': 10,
-    'nesz': 11,
-    'bckg': 12
+    'fnsz': 0,
+    'gnsz': 1,
+    'spsz': 2,
+    'cpsz': 3,
+    'absz': 4,
+    'tnsz': 5,
+    'cnsz': 6,
+    'tcsz': 7,
+    'atsz': 8,
+    'mysz': 9,
+    'nesz': 10,
+    'bckg': 11
 }
 CED_PATH = os.path.join(os.path.expanduser('~'), 'sda1', 'Documents', 'tuh_eeg', 'edf')
 HOME_PATH='E:\\Files\\tuh_eeg\\edf\\train'
@@ -236,9 +236,9 @@ def najafi_dwt(dataframe):
             coefficients = pywt.wavedec(epoch[item].values, wavelet='coif3', level=4)
             for co in coefficients:
                 stats = feat_creation.get_stats_with_power(co)
-                co_arr.append(stats)
-            add_arr.append(np.array(co_arr))
-        final_matrix.append(np.array(add_arr, dtype='object'))
+                co_arr.extend(stats)
+            add_arr.append(np.nan_to_num(np.asarray(co_arr).astype('float32')))
+        final_matrix.append(np.array(add_arr))
     return final_matrix, labels
 
 ############### EMPIRICAL WAVELET TRANSFORM #####################
@@ -349,11 +349,12 @@ def process_lstm_data(file_path_list, preprocessing_type):
             final_df.extend(file_matrix)
             final_labels.extend(labels)
         except ValueError:
+            print('SOMETHING HAPPENED!')
             unusable_files_counter += 1
             continue
         file_num += 1
     print("Unusable files: " + str(unusable_files_counter))
-    return np.array(final_df, dtype='object'), np.array(final_labels)
+    return np.array(final_df), np.array(final_labels)
 
 #print(pywt.wavelist(family='db',kind='discrete'))
 #df, labels, columns = read_data(train_file[0], 2)
@@ -406,7 +407,7 @@ def process_bilstm_all_data(preprocessing_type):
     #return df_train, labels_train, df_dev, labels_dev, df_eval, labels_eval
 
 #process_lstm_all_data(5)
-process_bilstm_all_data(6)
+#process_bilstm_all_data(6)
 #df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 2)
 #print(df)
 #read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 4)
