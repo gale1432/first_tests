@@ -24,3 +24,33 @@ def get_file_summary(file_list):
         file_dataframe = pd.read_csv(file, header=5)
         summary_dict.append([file, file_dataframe['label'].unique()])
     return summary_dict
+
+def delete_ar_files(file_list, name):
+    suffix = '03_tcp_ar_a'
+    files = pd.read_csv(file_list)
+    new_file_list = list()
+    kk = 0
+    for index, row in files.iterrows():
+        if row['0'].find(suffix) != -1:
+            new_file_list.append([row['0'].replace('csv', 'edf'), row['1']])
+            kk = kk + 1
+            print(kk)
+    pd.DataFrame(new_file_list).to_csv(name)
+    return 'done'
+
+def delete_not_ar_files(file_list, name):
+    suffix = '03_tcp_ar_a'
+    files = pd.read_csv(file_list)
+    new_file_list = list()
+    for index, row in files.iterrows():
+        if row['0'].find(suffix) == -1:
+            new_file_list.append([row['0'].replace('csv', 'edf'), row['1']])
+    pd.DataFrame(new_file_list).to_csv(name)
+    return 'done'
+
+def get_file_list(csv_file):
+    df = pd.read_csv(csv_file)
+    file_list = list()
+    for index, row in df.iterrows():
+        file_list.append(row['0'])
+    return file_list
