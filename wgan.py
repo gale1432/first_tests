@@ -18,32 +18,9 @@ LEARNING_RATE = 0.0002
 
 # Build the Generator
 def build_generator():
-    """model = keras.Sequential([
-        layers.Input(shape=(LATENT_DIM,)),
-        layers.Dense(128 * 7 * 14),
-        layers.Reshape((7, 14, 128)),
-        layers.BatchNormalization(),
-        layers.LeakyReLU(0.2),
-
-        layers.Conv2DTranspose(128, (5, 5), strides=(2, 2), padding='same'),
-        layers.BatchNormalization(),
-        layers.LeakyReLU(0.2),
-
-        layers.Conv2DTranspose(64, (5, 5), strides=(2, 2), padding='same'),
-        layers.BatchNormalization(),
-        layers.LeakyReLU(0.2),
-
-        layers.Conv2DTranspose(32, (5, 5), strides=(1, 2), padding='same'),
-        layers.BatchNormalization(),
-        layers.LeakyReLU(0.2),
-
-        layers.Conv2DTranspose(1, (7, 7), strides=(1, 1), padding='valid'),
-        layers.Cropping2D(cropping=((3, 3), (0, 0))),  # Output 22x112
-        layers.Activation('tanh')
-    ])"""
     model = keras.Sequential([
         layers.Input(shape=(LATENT_DIM,)),
-        layers.Dense(128 * 11 * 56),  # Directly target half dimensions
+        layers.Dense(128 * 11 * 56),
         layers.Reshape((11, 56, 128)),
         layers.BatchNormalization(),
         layers.LeakyReLU(0.2),
