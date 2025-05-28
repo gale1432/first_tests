@@ -48,9 +48,7 @@ def read_mne_data(file_path):
     events, ev_id = mne.events_from_annotations(raw=data, event_id=EVENT_DICT)
     return data, events, ev_id
 
-
-def read_data(file_path, preprocessing_type):
-    data, events, ev_id = read_mne_data(file_path)
+def mne_to_epochs_df(data, events, ev_id):
     try:
         epochs = mne.make_fixed_length_epochs(raw=data, duration=4.096)
         epochs.events = events
@@ -63,9 +61,60 @@ def read_data(file_path, preprocessing_type):
         epoch_dataframe = epochs.to_data_frame()
         new_montage = NewMontage(epoch_dataframe)
         epoch_dataframe = new_montage.change_montage()
+        return epoch_dataframe
         #print(epoch_dataframe)
     except ValueError:
         print("This file could not be used!")
+        raise ValueError
+
+def return_composed_signals(file_path):
+    data, events, ev_id = read_mne_data(file_path)
+    try:
+        epoch_dataframe = mne_to_epochs_df(data, events, ev_id)
+        return numpify_signals(epoch_dataframe)
+    except ValueError:
+        raise ValueError
+
+def numpify_signals(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.extend(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            #if extend is used, all channels are concatenated into a single vector
+            add_arr.extend(epoch[item].values)
+        final_matrix.append(add_arr)
+    return final_matrix, labels
+
+def process_signal_data(file_path_list):
+    final_df = list()
+    final_labels = list()
+    file_num = 1
+    unusable_files_counter = 0
+    for file_name in file_path_list:
+        print("***********************************************************")
+        print("File number: " + str(file_num))
+        try:
+            file_matrix, labels = return_composed_signals(file_name)
+            final_df.extend(file_matrix)
+            final_labels.extend(labels)
+        except ValueError:
+            print('SOMETHING HAPPENED!')
+            unusable_files_counter += 1
+            continue
+        file_num += 1
+    print("Unusable files: " + str(unusable_files_counter))
+    return np.array(final_df), np.array(final_labels)
+
+def read_data(file_path, preprocessing_type):
+    data, events, ev_id = read_mne_data(file_path)
+    try:
+        epoch_dataframe = mne_to_epochs_df(data, events, ev_id)
+    except ValueError:
         raise ValueError
     #check_unique_conditions_per_epoch(epoch_dataframe)
     #********************** THIS IS THE FAST FOURIER TRASNFORM CODE *******************************
@@ -431,6 +480,10 @@ def process_bilstm_all_data(preprocessing_type):
 #print(df[0].apply(type))
 #print(df)
 #read_data('C:\\Users\\arsms\\Documents\\tuh_eeg\\edf\\train\\aaaaaaag\\s004_2007\\03_tcp_ar_a\\aaaaaaag_s004_t000.edf')
+"""train_file = pd.read_csv('mne_file_lists/not_ar_not_bckg.csv')['0'].tolist()
+signals, final_labels = process_signal_data(train_file)
+np.save('x_composed.npy', signals, allow_pickle=True)
+np.save('y_composed.npy', final_labels, allow_pickle=True)"""
 """process_df, process_labels = process_data(train_file)
 print(process_df)
 

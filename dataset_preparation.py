@@ -48,6 +48,17 @@ def delete_not_ar_files(file_list, name):
     pd.DataFrame(new_file_list).to_csv(name)
     return 'done'
 
+def delete_bckg_files(file_list, name):
+    suffix = 'bckg'
+    files = pd.read_csv(file_list)
+    new_file_list = list()
+    for index, row in files.iterrows():
+        if len(row['1']) < 9 and row['1'].find(suffix) != -1:
+            continue
+        new_file_list.append([row['0'].replace('csv', 'edf'), row['1']])
+    pd.DataFrame(new_file_list).to_csv(name)
+    return 'done'
+
 def get_file_list(csv_file):
     df = pd.read_csv(csv_file)
     file_list = list()
