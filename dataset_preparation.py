@@ -3,6 +3,12 @@ import numpy as np
 from glob import glob
 import os
 
+"""
+The methods here are used to get a summary of the labels
+employed in the TUSZ database, as well as separate files
+depending on their recording circumstances.
+"""
+
 def unpack_labels(labels):
     new_series = list()
     for label in labels:
@@ -65,3 +71,23 @@ def get_file_list(csv_file):
     for index, row in df.iterrows():
         file_list.append(row['0'])
     return file_list
+
+def get_files_by_seizure(csv_file, sz_list, name='new_seizure_list.csv'):
+    df = pd.read_csv(csv_file)
+    file_list = list()
+    for index, row in df.iterrows():
+        for sz in sz_list:
+            if row['1'].find(sz) != -1:
+                file_list.append([row['0'].replace('csv', 'edf'), row['1']])
+                break
+    pd.DataFrame(file_list).to_csv(name)
+    return 'done'
+
+def delete_files_by_seizure(csv_file, seizure, name='new_seizure_list.csv'):
+    df = pd.read_csv(csv_file)
+    file_list = list()
+    for index, row in df.iterrows():
+        if row['1'].find(seizure) == -1:
+            file_list.append([row['0'].replace('csv', 'edf'), row['1']])
+    pd.DataFrame(file_list).to_csv(name)
+    return 'done'

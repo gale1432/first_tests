@@ -1,4 +1,6 @@
 from glob import glob
+
+import fathon
 import mne
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,13 +13,27 @@ from montage import NewMontage
 import feat_creation
 import ewtpy
 from PyEMD import CEEMDAN
-#from fathon import DFA
+from PyEMD import EMD
+import traceback
+from fathon import DFA
+from fathon import fathonUtils
 
 #from mne.conftest import event_id
 from sklearn.preprocessing import LabelEncoder
 
 #mne.viz.set_browser_backend("qt")
 
+"""EVENT_DICT = {
+    'fnsz': 0,
+    'gnsz': 1,
+    'spsz': 2,
+    'cpsz': 3,
+    'absz': 4,
+    'tnsz': 5,
+    'tcsz': 6,
+    'mysz': 7,
+    'bckg': 8
+}"""
 EVENT_DICT = {
     'fnsz': 0,
     'gnsz': 1,
@@ -25,12 +41,8 @@ EVENT_DICT = {
     'cpsz': 3,
     'absz': 4,
     'tnsz': 5,
-    'cnsz': 6,
-    'tcsz': 7,
-    'atsz': 8,
-    'mysz': 9,
-    'nesz': 10,
-    'bckg': 11
+    'tcsz': 6,
+    'bckg': 7
 }
 CED_PATH = os.path.join(os.path.expanduser('~'), 'sda1', 'Documents', 'tuh_eeg', 'edf')
 HOME_PATH='E:\\Files\\tuh_eeg\\edf\\train'
@@ -39,7 +51,7 @@ HOME_PATH='E:\\Files\\tuh_eeg\\edf\\train'
 
 def read_mne_data(file_path):
     data = mne.io.read_raw_edf(file_path, preload=True)
-    data.set_eeg_reference('average')
+    #data.set_eeg_reference('average')
     data = data.resample(250.0)
     data = data.notch_filter(60.0)
     annotations = read_annotation(file_path)
@@ -48,7 +60,7 @@ def read_mne_data(file_path):
     events, ev_id = mne.events_from_annotations(raw=data, event_id=EVENT_DICT)
     return data, events, ev_id
 
-def mne_to_epochs_df(data, events, ev_id):
+def mne_to_fixed_length_epochs_df(data, events, ev_id):
     try:
         epochs = mne.make_fixed_length_epochs(raw=data, duration=4.096)
         epochs.events = events
@@ -66,6 +78,17 @@ def mne_to_epochs_df(data, events, ev_id):
     except ValueError:
         print("This file could not be used!")
         raise ValueError
+
+def mne_to_epochs_df(data, events, ev_id):
+    try:
+        epochs = mne.Epochs(raw=data, events=events, event_id=ev_id, tmin=0.0, tmax=4.096)
+        epoch_dataframe = epochs.to_data_frame()
+        new_montage = NewMontage(epoch_dataframe)
+        epoch_dataframe = new_montage.change_montage()
+        return epoch_dataframe
+    except Exception:
+        print("This file could not be used!")
+        raise Exception
 
 def return_composed_signals(file_path):
     data, events, ev_id = read_mne_data(file_path)
@@ -113,56 +136,65 @@ def process_signal_data(file_path_list):
 def read_data(file_path, preprocessing_type):
     data, events, ev_id = read_mne_data(file_path)
     try:
-        epoch_dataframe = mne_to_epochs_df(data, events, ev_id)
+        epoch_dataframe = mne_to_fixed_length_epochs_df(data, events, ev_id)
+        #check_unique_conditions_per_epoch(epoch_dataframe)
+        #********************** THIS IS THE FAST FOURIER TRASNFORM CODE *******************************
+        if preprocessing_type == 1:
+            fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
+            if np.shape(fft_df)[1]:
+                fft_columns = [i for i in range(np.shape(fft_df)[1])]
+            else:
+                fft_columns = [i for i in range(np.shape(fft_df)[0])]
+            return fft_df, fft_labels, fft_columns
+        #********************** THIS IS THE DISCRETE WAVELET TRANSFORM CODE ****************************
+        elif preprocessing_type == 2:
+            dwt_df, dwt_labels = discrete_wt(epoch_dataframe)
+            if np.shape(dwt_df)[1]:
+                dwt_columns = [i for i in range(np.shape(dwt_df)[1])]
+            else:
+                dwt_columns = [i for i in range(np.shape(dwt_df)[0])]
+            return dwt_df, dwt_labels, dwt_columns
+        #*********************** THIS IS WAVELET PACKET DECOMPOSITION CODE ******************************
+        elif preprocessing_type == 3:
+            wpd_df, wpd_labels = wavelet_packet_decomp(epoch_dataframe)
+            return wpd_df, wpd_labels
+        #********************* THIS IS EMPIRICAL WAVELET TRANSFORM ***********************
+        elif preprocessing_type == 4:
+            #empirical_wt(epoch_dataframe)
+            ewt_df, ewt_labels = empirical_wt(epoch_dataframe)
+            if np.shape(ewt_df)[1]:
+                dwt_columns = [i for i in range(np.shape(ewt_df)[1])]
+            else:
+                dwt_columns = [i for i in range(np.shape(ewt_df)[0])]
+            return ewt_df, ewt_labels, dwt_columns
+        elif preprocessing_type == 5:
+            ppd_matrix, ppd_labels = matrices_creation(epoch_dataframe)
+            return ppd_matrix, ppd_labels
+        #******************** THIS IS DWT, BUT WITH CHARACTERISTICS EXTRACTED FROM NAJAFI *******************
+        elif preprocessing_type == 6:
+            dwt_df, dwt_labels = najafi_dwt(epoch_dataframe)
+            return dwt_df, dwt_labels
+        #*********************** CEEMDAN METHOD OUTS PANDAS DATAFRAME ***********************************
+        elif preprocessing_type == 7:
+            ceemdan_df, ceemdan_labels = ceemdan(epoch_dataframe)
+            return ceemdan_df, ceemdan_labels, np.arange(5)
+        #********************** EMD METHOD: OUTS LIST ******************************************
+        elif preprocessing_type == 8:
+            emd_df, emd_labels = emd(epoch_dataframe)
+            return emd_df, emd_labels
+        return "GG"
     except ValueError:
         raise ValueError
-    #check_unique_conditions_per_epoch(epoch_dataframe)
-    #********************** THIS IS THE FAST FOURIER TRASNFORM CODE *******************************
-    if preprocessing_type == 1:
-        fft_df, fft_labels = fft_matrix_creation(epoch_dataframe)
-        if np.shape(fft_df)[1]:
-            fft_columns = [i for i in range(np.shape(fft_df)[1])]
-        else:
-            fft_columns = [i for i in range(np.shape(fft_df)[0])]
-        return fft_df, fft_labels, fft_columns
-    #********************** THIS IS THE DISCRETE WAVELET TRANSFORM CODE ****************************
-    elif preprocessing_type == 2:
-        dwt_df, dwt_labels = discrete_wt(epoch_dataframe)
-        if np.shape(dwt_df)[1]:
-            dwt_columns = [i for i in range(np.shape(dwt_df)[1])]
-        else:
-            dwt_columns = [i for i in range(np.shape(dwt_df)[0])]
-        return dwt_df, dwt_labels, dwt_columns
-    #*********************** THIS IS WAVELET PACKET DECOMPOSITION CODE ******************************
-    elif preprocessing_type == 3:
-        wpd_df, wpd_labels = wavelet_packet_decomp(epoch_dataframe)
-        return wpd_df, wpd_labels
-    #********************* THIS IS EMPIRICAL WAVELET TRANSFORM ***********************
-    elif preprocessing_type == 4:
-        #empirical_wt(epoch_dataframe)
-        ewt_df, ewt_labels = empirical_wt(epoch_dataframe)
-        if np.shape(ewt_df)[1]:
-            dwt_columns = [i for i in range(np.shape(ewt_df)[1])]
-        else:
-            dwt_columns = [i for i in range(np.shape(ewt_df)[0])]
-        return ewt_df, ewt_labels, dwt_columns
-    elif preprocessing_type == 5:
-        ppd_matrix, ppd_labels = matrices_creation(epoch_dataframe)
-        return ppd_matrix, ppd_labels
-    #******************** THIS IS DWT, BUT WITH CHARACTERISTICS EXTRACTED FROM NAJAFI *******************
-    elif preprocessing_type == 6:
-        dwt_df, dwt_labels = najafi_dwt(epoch_dataframe)
-        return dwt_df, dwt_labels
-    elif preprocessing_type == 7:
-        ceemdan_df, ceemdan_labels = ceemdan(epoch_dataframe)
-        return ceemdan_df, ceemdan_labels, np.arange(5)
-    return "GG"
+    except RuntimeError:
+        raise RuntimeError
+    except Exception:
+        raise Exception
     #data.plot(duration=20, n_channels=31, bgcolor='white', scalings='auto')
     #print(events)
 
 def read_annotation(file_path):
-    an_file = file_path.replace('.edf', '.csv')
-    annotations = pd.read_csv(an_file, skiprows=5)
+    an_file = file_path.replace('.edf', '_new.csv')
+    annotations = pd.read_csv(an_file) # used for when the original annotations file is used, skiprows=5)
     #annotations = annotations[annotations['label'] != 'bckg']
     return annotations
 
@@ -217,6 +249,7 @@ def fft_matrix_creation(dataframe):
         #add_arr = add_arr.append(condition) #problem here, makes list become type None, for some fucking reason
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
+    #return final_matrix, labels
 
 ################## GIVEN THAT CONTINUOUS WAVELET TRANSFORM IS BETTER SUITED FOR NEURAL NETWORKS, THIS METHOD WONT BE USED FOR NOW #######################
 def continuous_wt(dataframe):
@@ -251,7 +284,7 @@ def discrete_wt(dataframe):
     labels = []
     final_matrix = []
 
-    for i in range(epoch_number):
+    for i in range(1, epoch_number):
         epoch = dataframe[dataframe['epoch'] == i]
         labels.extend(epoch['condition'].unique())
         add_arr = []
@@ -335,6 +368,28 @@ def ceemdan(dataframe):
         final_matrix.append(add_arr)
     return pd.DataFrame(final_matrix), pd.Series(labels)
 
+###################### EMPIRICAL MODE DECOMPOSITION ###################################################################
+def emd(dataframe):
+    epoch_number = dataframe['epoch'].max()
+    column_names = get_column_names(dataframe)
+    labels = []
+    final_matrix = []
+    emd_method = EMD()
+    mode_number = 5
+
+    for i in range(epoch_number):
+        epoch = dataframe[dataframe['epoch'] == i]
+        labels.extend(epoch['condition'].unique())
+        add_arr = []
+        for item in column_names:
+            imfs = emd_method.emd(epoch[item].values, max_imf=mode_number)
+            coefficients_dataframe = pd.DataFrame(imfs)
+            for i in range(mode_number):
+                stats = feat_creation.get_stats_with_power(list(coefficients_dataframe[i]))
+                add_arr.extend(stats)
+        final_matrix.append(add_arr)
+    return final_matrix, labels
+
 #################################### WAVELET PACKET DECOMPOSITION #############################
 def wavelet_packet_decomp(dataframe):
     epoch_number = dataframe['epoch'].max()
@@ -348,20 +403,37 @@ def wavelet_packet_decomp(dataframe):
         add_arr = []
         for item in column_names:
             coefficients = []
-            wavelet_dec = pywt.WaveletPacket(epoch[item].values, 'db4', 'zero', 4)
-            levels = wavelet_dec.get_level(4, order='freq')
+            wavelet_dec = pywt.WaveletPacket(epoch[item].values, 'db4', 'zero', 7)
+            levels = wavelet_dec.get_level(7, order='freq')
+            #pp = wavelet_dec.reconstruct()
             #kk = [node.path for node in levels]
             #print(len(kk))
             for level in levels:
-                data = level.data
+                #kk = sp.fft.fftfreq(level.data.size, d=0.001)
+                freqm = detrended_fluctuation_analysis(level.data)
+                add_arr.extend(freqm)
+                #data = level.data
                 #print(data)
-                coefficients.extend(feat_creation.get_full_stats(data))
+                #coefficients.extend(feat_creation.get_full_stats(data))
             """for co in coefficients:
                 add_arr.append(co)"""
-            add_arr.extend(coefficients)
+            #add_arr.extend(coefficients)
             # print(add_arr)
         final_matrix.append(np.array(add_arr))
     return final_matrix, labels
+
+####################### DETRENDED FLUCTUATION ANALYSIS ######################################
+def detrended_fluctuation_analysis(array):
+    final_matrix = []
+    coeff_size = len(array)
+    a = fathonUtils.toAggregated(array)
+    pydfa = fathon.DFA(a)
+    wins = fathonUtils.linRangeByStep(5, coeff_size)
+    n, F = pydfa.computeFlucVec(wins, polOrd=2)
+    final_matrix.extend(F)
+    h,  h_intercept = pydfa.fitFlucVec()
+    final_matrix.append(h)
+    return final_matrix
 
 ############## Preparing 2D matrices ###########################
 def matrices_creation(dataframe):
@@ -392,11 +464,15 @@ def process_data(file_path_list, preprocessing_type):
         print("************************************************************")
         print("File number: " + str(file_num))
         try:
-            file_df, fft_labels, fft_columns = read_data(file_name.replace('csv', 'edf'), preprocessing_type)
+            file_df, fft_labels, fft_columns = read_data(file_name.replace('.csv', '.edf'), preprocessing_type)
             print('pp')
             final_df = pd.concat([final_df, file_df], axis=0)
             final_labels = pd.concat([final_labels, fft_labels], axis=0)
         except ValueError:
+            print('SOMETHING HAPPENED!')
+            unusable_files_counter += 1
+            continue
+        except Exception:
             print('SOMETHING HAPPENED!')
             unusable_files_counter += 1
             continue
@@ -412,12 +488,23 @@ def process_lstm_data(file_path_list, preprocessing_type):
     for file_name in file_path_list:
         print("***********************************************************")
         print("File number: " + str(file_num))
+        if unusable_files_counter == 39:
+            print('This is it, bitch')
         try:
             file_matrix, labels = read_data(file_name, preprocessing_type)
             final_df.extend(file_matrix)
             final_labels.extend(labels)
         except ValueError:
             print('SOMETHING HAPPENED!')
+            print(traceback.format_exc())
+            unusable_files_counter += 1
+            continue
+        except RuntimeError:
+            print('Runtime Error!')
+            unusable_files_counter += 1
+            continue
+        except Exception:
+            print('Exception!')
             unusable_files_counter += 1
             continue
         file_num += 1
@@ -431,49 +518,72 @@ def process_lstm_data(file_path_list, preprocessing_type):
 #print(train_file)
 #print(df)
 #df, labels = process_data(train_file, 1)
-def process_all_data(preprocessing_type, train_file, dev_file, eval_file):
+def process_all_data(preprocessing_type): #, train_file, dev_file, eval_file):
+    train_file = pd.read_csv('mne_file_lists/not_ar_not_bckg.csv')['0'].tolist()
+    dev_file = pd.read_csv('mne_file_lists/dev_not_ar.csv')['0'].tolist()
+    eval_file = pd.read_csv('mne_file_lists/eval_not_ar.csv')['0'].tolist()
     df, labels = process_data(train_file, preprocessing_type)
-    joblib.dump((df, labels), 'train_dwt_four.sav')
+    joblib.dump((df, labels), 'train_dwt.sav')
     df, labels = process_data(dev_file, preprocessing_type)
-    joblib.dump((df, labels), 'dev_dwt_four.sav')
+    joblib.dump((df, labels), 'dev_dwt.sav')
     df, labels = process_data(eval_file, preprocessing_type)
-    joblib.dump((df, labels), 'eval_dwt_four.sav')
+    joblib.dump((df, labels), 'eval_dwt.sav')
+
+def process_gg_data(preprocessing_type):
+    train_file = pd.read_csv('basri_fft_train_summary.csv')['0'].tolist()
+    dev_file = pd.read_csv('basri_fft_dev_summary.csv')['0'].tolist()
+    eval_file = pd.read_csv('basri_fft_eval_summary.csv')['0'].tolist()
+    #df, labels = process_lstm_data(train_file, preprocessing_type)
+    #np.save('emd/train_x.npy', df, allow_pickle=True)
+    #np.save('emd/train_y.npy', labels, allow_pickle=True)
+    df, labels = process_data(train_file, preprocessing_type)
+    np.save('fft/train_x.npy', df, allow_pickle=True)
+    np.save('fft/train_y.npy', labels, allow_pickle=True)
+    df, labels = process_data(dev_file, preprocessing_type)
+    np.save('fft/dev_x.npy', df, allow_pickle=True)
+    np.save('fft/dev_y.npy', labels, allow_pickle=True)
+    df, labels = process_data(eval_file, preprocessing_type)
+    np.save('fft/eval_x.npy', df, allow_pickle=True)
+    np.save('fft/eval_y.npy', labels, allow_pickle=True)
 
 #process_all_data(6)
 
 def process_lstm_all_data(preprocessing_type):
-    train_file = pd.read_csv('train_summary.csv')['0'].tolist()
-    dev_file = pd.read_csv('dev_summary.csv')['0'].tolist()
-    eval_file = pd.read_csv('eval_summary.csv')['0'].tolist()
+    train_file = pd.read_csv('mne_file_lists/not_ar_not_bckg.csv')['0'].tolist()
+    dev_file = pd.read_csv('mne_file_lists/dev_not_ar.csv')['0'].tolist()
+    eval_file = pd.read_csv('mne_file_lists/eval_not_ar.csv')['0'].tolist()
     df_train, labels_train = process_lstm_data(train_file, preprocessing_type)
-    #joblib.dump((df, labels), 'train_ppd.sav')
+    joblib.dump((df_train, labels_train), 'train_emd.sav')
     df_dev, labels_dev = process_lstm_data(dev_file, preprocessing_type)
-    #joblib.dump((df, labels), 'dev_ppd.sav')
-    #df, labels = process_lstm_data(eval_file, preprocessing_type)
-    #joblib.dump((df, labels), 'eval_ppd.sav')
+    joblib.dump((df_dev, labels_dev), 'dev_emd.sav')
+    df, labels = process_lstm_data(eval_file, preprocessing_type)
+    joblib.dump((df, labels), 'eval_emd.sav')
     return df_train, labels_train, df_dev, labels_dev
 
 def process_bilstm_all_data(preprocessing_type):
     """train_file = glob(CED_PATH + '/train/**/*.edf', recursive=True)  # for linux
     dev_file = glob(CED_PATH + '/dev/**/*.edf', recursive=True)
     eval_file = glob(CED_PATH + '/eval/**/*.edf', recursive=True)"""
-    train_file = pd.read_csv('mne_file_lists/train_not_ar.csv')['0'].tolist()
-    dev_file = pd.read_csv('mne_file_lists/dev_not_ar.csv')['0'].tolist()
-    eval_file = pd.read_csv('mne_file_lists/eval_not_ar.csv')['0'].tolist()
+    train_file = pd.read_csv('tang_train_summary.csv')['0'].tolist()
+    dev_file = pd.read_csv('tang_dev_summary.csv')['0'].tolist()
+    eval_file = pd.read_csv('tang_eval_summary.csv')['0'].tolist()
     df_train, labels_train = process_lstm_data(train_file, preprocessing_type)
-    np.save('wpd/train_x.npy', df_train, allow_pickle=True)
-    np.save('wpd/train_y.npy', labels_train, allow_pickle=True)
+    np.save('wpd/tang_train_x.npy', df_train, allow_pickle=True)
+    np.save('wpd/tang_train_y.npy', labels_train, allow_pickle=True)
     df_dev, labels_dev = process_lstm_data(dev_file, preprocessing_type)
-    np.save('wpd/dev_x.npy', df_dev, allow_pickle=True)
-    np.save('wpd/dev_y.npy', labels_dev, allow_pickle=True)
+    np.save('wpd/tang_dev_x.npy', df_dev, allow_pickle=True)
+    np.save('wpd/tang_dev_y.npy', labels_dev, allow_pickle=True)
     df_eval, labels_eval = process_lstm_data(eval_file, preprocessing_type)
-    np.save('wpd/eval_x.npy', df_eval, allow_pickle=True)
-    np.save('wpd/eval_y.npy', labels_eval, allow_pickle=True)
+    np.save('wpd/tang_eval_x.npy', df_eval, allow_pickle=True)
+    np.save('wpd/tang_eval_y.npy', labels_eval, allow_pickle=True)
     #return df_train, labels_train, df_dev, labels_dev, df_eval, labels_eval
 
-#process_lstm_all_data(5)
+#process_gg_data(1)
+process_bilstm_all_data(3)
+#process_lstm_all_data(8)
+#process_gg_data(8)
 #process_bilstm_all_data(6)
-#df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 7)
+#df, labels, columns = read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 8)
 #print(df)
 #read_data('/home/gaelh/sda1/Documents/tuh_eeg/edf/train/aaaaaaac/s001_2002/02_tcp_le/aaaaaaac_s001_t000.edf', 4)
 #print(type(df[0]))

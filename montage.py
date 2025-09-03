@@ -25,8 +25,8 @@ class NewMontage:
             'F4-C4':  ['F4','C4'],
             'C4-P4':  ['C4','P4'],
             'P4-O2':  ['P4','O2'],
-            'T4-A2': ['T4','A2'],
-            'A1-T3': ['A1','T3']
+            #'T4-A2': ['T4','A2'],
+            #'A1-T3': ['A1','T3']
         }
 
     def change_montage(self):
